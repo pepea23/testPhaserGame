@@ -1,7 +1,8 @@
 let width, height;
 let x, y, distX, distY;
-let player, bullets, bombs;
-let bomb;
+let player, bullets, bombs, playerBullets, reticle;
+let lastFired = 0;
+let time;
 let scoreText, topScoreText, dataText;
 let cursors, emitter;
 let gameover = false;
@@ -51,10 +52,16 @@ class GameScene extends Phaser.Scene {
         bombs.create(600, 400, 'star');
         bombs.create(50, 250, 'star');
         bombs.create(750, 220, 'star');
+        //bombs.x = player.x+100;   
+        //bombs.y = player.y;
+        bombs.allowGravity = false;
         
 
-
-        this.bullets = this.add.group({ classType: Bullet, runChildUpdate: true });
+        reticle = this.physics.add.image(0, 0, 'star');
+        reticle.setOrigin(0.5, 0.5).setDisplaySize(25, 25).setCollideWorldBounds(true);
+        reticle.x = player.x+100
+        reticle.y = player.y
+        reticle.setVisible(false)
 
         var Bullet = new Phaser.Class({
             Extends: Phaser.GameObjects.Image,
@@ -62,24 +69,68 @@ class GameScene extends Phaser.Scene {
             function Bullet (scene)
             {
                 Phaser.GameObjects.Image.call(this, scene, 0, 0, 'bullet');
-    
-                this.speed = 0;
+                this.speed = 1;
                 this.born = 0;
+                this.direction = 0;
+                this.xSpeed = 0;
+                this.ySpeed = 0;
+                this.setSize(12, 12, true);
+            },
+
+            fire: function (shooter, target)
+            {
+                this.setPosition(shooter.x, shooter.y); 
+                this.direction = Math.atan( (target.x-this.x) / (target.y-this.y));
+
+                if (target.y >= this.y)
+                {
+                    this.xSpeed = this.speed*Math.sin(this.direction);
+                    this.ySpeed = this.speed*Math.cos(this.direction);
+                }
+                else
+                {
+                    this.xSpeed = -this.speed*Math.sin(this.direction);
+                    this.ySpeed = -this.speed*Math.cos(this.direction);
+                }
+        
+                this.rotation = shooter.rotation; 
+                this.born = 0; 
+            },
+        
+            update: function (time, delta)
+            {
+                this.x += this.xSpeed * delta;
+                this.y += this.ySpeed * delta;
+                this.born += delta;
+                if (this.born > 1800)
+                {
+                    this.setActive(false);
+                    this.setVisible(false);
+                }
             }
+        
+        });
+
+        bullets = this.add.group({
+            classType: Bullet,
+            //maxSize: 1000,
+            runChildUpdate: true
         });
 
         this.physics.add.collider(player, bombs, () => {
             gameover = true;
-        });
-
-        
-        
+        });     
 
         
     }
 
     update() {
        
+        let angle = Math.PI/180*player.angle;
+        reticle.x = player.x+100*Math.cos(angle);
+        reticle.y = player.y+100*Math.sin(angle);
+
+        //Phaser.Actions.WrapInRectangle(bombs, 72);
 
         if (cursors.up.isDown || this.keyW.isDown)
         {
@@ -107,6 +158,8 @@ class GameScene extends Phaser.Scene {
                     return output;
                 }
             };
+
+            
             var emitter = particles.createEmitter({
             x: player.x*5,
             y: player.y*5,
@@ -115,7 +168,7 @@ class GameScene extends Phaser.Scene {
             //gravityY: 20,
             //lifespan: { min: 1000, max: 2000 },
             blendMode: 'SCREEN',
-            deathZone: { type: 'onLeave', source: circle },
+            //deathZone: { type: 'onLeave', source: circle },
             scale: { start: 0.5, end: 0 },
             emitZone: { type: 'edge', source: rose, quantity: 360 }
             });
@@ -128,10 +181,13 @@ class GameScene extends Phaser.Scene {
         if (cursors.left.isDown || this.keyA.isDown )
         {
             player.setAngularVelocity(-300);
+           
         }
         else if (cursors.right.isDown || this.keyD.isDown)
         {
             player.setAngularVelocity(300);
+          
+
         }
         else
         {
@@ -140,9 +196,12 @@ class GameScene extends Phaser.Scene {
 
         if (cursors.space.isDown)
         {
-            var bullet = this.bullets.get();
-            bullet.setActive(true);
-            bullet.setVisible(true);
+            var bullet = bullets.get();
+            if (bullet)
+            {
+                bullet.fire(player,reticle);
+                lastFired = time + 50;
+            }
         }
 
         // if (gameover == true) {
